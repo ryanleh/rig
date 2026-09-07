@@ -1,5 +1,12 @@
 # Cluster (AWS)
 
+**A starting point to copy into your own repo, not a dependency.** Real
+deployments grow application facts this config cannot know — your services'
+port ranges in the security groups, instance shapes, extra machines — so take
+it, rename it, and shape it. The only contract rig's runner has with any of it
+is the inventory JSON it emits; a cluster provisioned any other way works the
+same.
+
 Terraform for a distributed experiment cluster: one instance per name in
 `var.server_names` plus `var.client_count` client machines, all Ubuntu 24.04 in
 a cluster placement group, SSH open to `allowed_cidr` and everything open
