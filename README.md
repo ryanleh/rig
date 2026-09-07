@@ -181,6 +181,4 @@ rest exists.
 
 ---
 
-Built by [ryanleh](https://github.com/ryanleh) with substantial help from
-Claude (Anthropic), who wrote much of the code and the docs, and found more
-than one bug the hard way.
+Designed by me, written by Claude.
