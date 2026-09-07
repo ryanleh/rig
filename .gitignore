@@ -1,0 +1,7 @@
+bin/
+results/
+# stray binaries from `go build` without -o
+/echoserver
+/echodriver
+/postboxd
+/postboxdriver

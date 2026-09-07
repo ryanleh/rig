@@ -1,0 +1,11 @@
+# A queue file: one suite path per line, run in order, `#` comments ignored.
+# Paths resolve against this file's directory, so the queue travels with the
+# suites it names.
+#
+#   rig queue -inventory driver/example/inventory-local.json \
+#             -results results -bin bin driver/example/example.queue
+#
+# `rig doctor` runs before each suite; the journal is results/queue.json, and
+# `rig watch -results results -queue` follows it.
+suite-smoke.json
+suite-ramp.json

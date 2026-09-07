@@ -1,0 +1,55 @@
+// The smallest complete suite: one service, one sharded workload, two matrix
+// points, everything on this machine. `make smoke` runs it.
+//
+//   rig run -suite driver/example/suite-smoke.json \
+//           -inventory driver/example/inventory-local.json \
+//           -results results -bin bin
+{
+  "name": "smoke-local",
+  "roles": {
+    // A service role is long-running: started before the workload, gated on
+    // its port accepting, stopped by the runner, and (with
+    // fresh_servers_per_point) restarted between points so one point cannot
+    // leak state into the next.
+    "server": {
+      "machine": "server",
+      "service": true,
+      "cmd": "bin/echoserver -listen 0.0.0.0:9100 -workers 4 -service-time 2ms -metrics-out {{.out}} -metrics-start {{.start_ms}} -metrics-warmup 2s",
+      "ready": {"port": 9100, "timeout": "10s"}
+    },
+    // A workload role runs to completion each point. "machines" starts one
+    // process per member of the group; {{.index}} and {{.nshards}} tell each
+    // which slice of the system total it owns.
+    "shard": {
+      "machines": "clients",
+      "timeout": "3m",
+      "cmd": "bin/echodriver -server localhost:9100 -probes 2 -load {{.point.load}} -shards {{.nshards}} -shard-index {{.index}} -sweep 200ms -duration 12s -warmup 2s -dial-for 1s -gap 500ms -start-ms {{.start_ms}} -out {{.out}}"
+    }
+  },
+  // The cross product of these is the run. Values reach the commands as
+  // {{.point.<axis>}} and label every row of the CSV.
+  "matrix": {"load": [16, 128]},
+  "reps": 1,
+  "lifecycle": {"fresh_servers_per_point": true, "setup_budget": "5s"},
+  // Each entry pulls one summary.json series into aggregates.csv as <name>,
+  // <name>_ops_per_sec and <name>_bytes_per_sec.
+  "metrics": [
+    {"name": "latency", "role": "shard", "summary": "workload/latency"},
+    {"name": "op", "role": "shard", "summary": "workload/op"},
+        {"name": "handle", "role": "server", "summary": "server/handle"},
+    {"name": "queued", "role": "server", "summary": "server/queued"}
+  ],
+  // A receipt, stated once for the whole sweep: every active client completes
+  // one probe per sweep, so the system total is load/0.2s — and point.load is
+  // what makes one expression cover both matrix points. Soft (the default):
+  // on a busy laptop the open-loop generator can slip, and that is a fact
+  // about the machine worth reading rather than a reason to fail the run.
+  "checks": [
+    {"name": "throughput vs theory",
+     "expr": "abs(op_ops_per_sec.mean - point.load / 0.2) < 0.05 * point.load / 0.2"}
+  ]
+  // No "health": the trust table defaults to every conventional column, and
+  // each one disappears unless something reported the counters behind it —
+  // so a driver only ever sees the columns it actually emits. Use
+  // "health_sets" to narrow it, or "health" to add columns of your own.
+}

@@ -1,0 +1,35 @@
+// The other shape: ONE deployment and one matrix point, with the driver
+// stepping the load itself and labelling each window as a phase. The whole
+// curve comes out of a single point, which is what makes a large population
+// affordable — you pay the setup ramp once instead of once per point.
+//
+// Use this whenever the axis you are sweeping does not require a server
+// restart. Sweeping a *server* flag still needs fresh servers per point.
+//
+//   rig run -suite driver/example/suite-ramp.json \
+//           -inventory driver/example/inventory-local.json \
+//           -results results -bin bin
+{
+  "name": "ramp-local",
+  "roles": {
+    "server": {
+      "machine": "server",
+      "service": true,
+      "cmd": "bin/echoserver -listen 0.0.0.0:9100 -workers 4 -service-time 2ms -metrics-out {{.out}} -metrics-start {{.start_ms}} -metrics-warmup 2s",
+      "ready": {"port": 9100, "timeout": "10s"}
+    },
+    "shard": {
+      "machines": "clients",
+      "timeout": "3m",
+      "cmd": "bin/echodriver -server localhost:9100 -probes 2 -load 256 -shards {{.nshards}} -shard-index {{.index}} -sweep 200ms -warmup 2s -dial-for 1s -gap 500ms -steps 16,64,256 -step-duration 8s -start-ms {{.start_ms}} -out {{.out}}"
+    }
+  },
+  "reps": 1,
+  "lifecycle": {"fresh_servers_per_point": true, "setup_budget": "10s"},
+  "metrics": [
+    {"name": "latency", "role": "shard", "summary": "workload/latency"},
+    {"name": "op", "role": "shard", "summary": "workload/op"},
+    {"name": "handle", "role": "server", "summary": "server/handle"},
+    {"name": "queued", "role": "server", "summary": "server/queued"}
+  ]
+}

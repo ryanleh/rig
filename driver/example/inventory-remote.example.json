@@ -1,0 +1,13 @@
+// A deployment inventory. `host` is the address OTHER machines reach this one
+// at — what {{ip "name"}} resolves to, so on a cloud provider it is the
+// private address. `ssh` is where the runner itself connects, and `key` is the
+// identity it uses. Local and SSH machines can mix in one inventory.
+{
+  "machines": {
+    "server":  {"host": "10.0.1.10", "ssh": "ubuntu@52.0.0.10", "key": "~/.ssh/rig.pem"},
+    "clients": [
+      {"host": "10.0.1.20", "ssh": "ubuntu@52.0.0.20", "key": "~/.ssh/rig.pem"},
+      {"host": "10.0.1.21", "ssh": "ubuntu@52.0.0.21", "key": "~/.ssh/rig.pem"}
+    ]
+  }
+}

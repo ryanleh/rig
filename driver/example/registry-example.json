@@ -1,0 +1,43 @@
+// A registry manifest: what each producer records, for `rig doctor -registry`.
+//
+// It is the second basis doctor validates a suite's metric and health
+// selectors against. The first — a prior results tree for the same suite — is
+// exact and needs no maintenance, but it only exists after a run; this file is
+// what lets a brand new suite, or a new role, be checked before its first
+// sweep. Where both exist, the tree wins for the roles it covers.
+//
+// A producer key is matched against a suite role by the role's own name and by
+// any bin/<name> its command invokes, so a driver can ship one file named for
+// its binary. The entries are exactly the objects a process writes into
+// summary.json's "registry" array (see driver/CONTRACT.md), which is what lets
+// a driver generate this file instead of maintaining it by hand — these two
+// were lifted verbatim out of a `make smoke` results tree.
+{
+  "version": 1,
+  "producers": {
+    "echodriver": [
+      {"kind": "gauge", "role": "runtime", "name": "goroutines", "unit": "count"},
+      {"kind": "gauge", "role": "runtime", "name": "heap_alloc", "unit": "bytes"},
+      {"kind": "gauge", "role": "runtime", "name": "heap_live", "unit": "bytes"},
+      {"kind": "gauge", "role": "runtime", "name": "heap_sys", "unit": "bytes"},
+      {"kind": "counter", "role": "workload", "name": "attempted", "unit": "count"},
+      {"kind": "counter", "role": "workload", "name": "completed", "unit": "count"},
+      {"kind": "counter", "role": "workload", "name": "cutoff", "unit": "count"},
+      {"kind": "counter", "role": "workload", "name": "scheduled", "unit": "count"},
+      {"kind": "counter", "role": "workload", "name": "slips", "unit": "count"},
+      {"kind": "counter", "role": "workload", "name": "timeouts", "unit": "count"},
+      {"kind": "sample", "role": "workload", "name": "latency"},
+      {"kind": "span", "role": "workload", "name": "op"}
+    ],
+    "echoserver": [
+      {"kind": "gauge", "role": "runtime", "name": "goroutines", "unit": "count"},
+      {"kind": "gauge", "role": "runtime", "name": "heap_alloc", "unit": "bytes"},
+      {"kind": "gauge", "role": "runtime", "name": "heap_live", "unit": "bytes"},
+      {"kind": "gauge", "role": "runtime", "name": "heap_sys", "unit": "bytes"},
+      {"kind": "span", "role": "server", "name": "handle"},
+      {"kind": "gauge", "role": "server", "name": "queue_depth", "unit": "count"},
+      {"kind": "span", "role": "server", "name": "queued"},
+      {"kind": "counter", "role": "server", "name": "served", "unit": "count"}
+    ]
+  }
+}

@@ -1,0 +1,11 @@
+// Everything on this machine — the dev/smoke inventory. A deployment
+// inventory has the same shape with real hosts; see infra/ for one generated
+// from terraform output, and inventory-remote.example.json for the fields.
+{
+  "machines": {
+    "server": {"host": "local"},
+    // A machine group: the runner starts one process per member for a role
+    // that names it with "machines", handing each its own {{.index}}.
+    "clients": [{"host": "local"}, {"host": "local"}]
+  }
+}

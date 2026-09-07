@@ -1,0 +1,67 @@
+// The litmus test: a mailbox system, the shape a real messaging or anonymity
+// system has, driven entirely by rig primitives.
+//
+// This is the persistent-deployment shape — ONE server and one matrix point,
+// with the driver stepping population and load itself and labelling each
+// window as a phase. The whole curve comes out of a single point, which is
+// what makes a large population affordable: you pay the registration ramp once
+// instead of once per point.
+//
+//   rig run -suite driver/example/suite-postbox.json \
+//           -inventory driver/example/inventory-local.json \
+//           -results results -bin bin
+{
+  "name": "postbox-local",
+  "roles": {
+    "server": {
+      "machine": "server",
+      "service": true,
+      // flush-cost is what makes the epoch fall behind wall time under load,
+      // which is what gives the driver's -barrier-stall guard something real
+      // to watch. Raise it to watch a barrier catch a server that cannot keep
+      // up; the run fails loudly instead of measuring the catch-up.
+      "cmd": "bin/postboxd -listen 0.0.0.0:9200 -epoch-interval 250ms -flush-cost 20us -metrics-out {{.out}} -metrics-start {{.start_ms}} -metrics-warmup 3s",
+      "ready": {"port": 9200, "timeout": "10s"}
+    },
+    "shard": {
+      "machines": "clients",
+      "timeout": "4m",
+      // Population and active load step together: "64:16" is 64 registered
+      // clients with 16 of them working. Population never decreases, because
+      // registration is irreversible in the systems this stands in for.
+      "cmd": "bin/postboxdriver -server {{ip \"server\"}}:9200 -probes 2 -shards {{.nshards}} -shard-index {{.index}} -steps 64:16,64:64,256:256 -step-duration 8s -sweep 250ms -warmup 3s -dial-for 2s -gap 1s -timeout 15s -payload 512 -mark-phases -start-ms {{.start_ms}} -out {{.out}}"
+    }
+  },
+  "reps": 1,
+  "lifecycle": {"fresh_servers_per_point": true, "setup_budget": "15s"},
+  "metrics": [
+    {"name": "latency", "role": "shard", "summary": "workload/latency"},
+    {"name": "sync", "role": "shard", "summary": "workload/sync"},
+    {"name": "flush", "role": "server", "summary": "server/flush"}
+  ],
+  // The receipts. This suite's whole point is that its throughput is checkable
+  // against theory: every active client syncs once per sweep, so the system
+  // total is active/sweep = active/0.25s, summed across both shards — which is
+  // what the merged "all" row of sync_ops_per_sec holds. Each step declares
+  // its own phase, so each phase gets its own line.
+  //
+  // These are fatal: a mailbox system that does not hit its own arithmetic is
+  // not a slightly worse result, it is a broken measurement, and this suite is
+  // the litmus test for the window denominator that produces the number. The
+  // band is 5%; the figure this was written against was within 0.1% (DESIGN.md
+  // §10 has the table).
+  "checks": [
+    {"name": "throughput vs theory, 16 active", "fatal": true,
+     "expr": "abs(sync_ops_per_sec[\"population=64,active=16\"].mean - 64) < 0.05 * 64"},
+    {"name": "throughput vs theory, 64 active", "fatal": true,
+     "expr": "abs(sync_ops_per_sec[\"active=64\"].mean - 256) < 0.05 * 256"},
+    {"name": "throughput vs theory, 256 active", "fatal": true,
+     "expr": "abs(sync_ops_per_sec[\"population=256,active=256\"].mean - 1024) < 0.05 * 1024"},
+    // A counter's total lands in the mean column (there is no distribution
+    // behind a total). Delivery is what makes the throughput mean anything:
+    // a run that scheduled the right number of syncs and lost the probes
+    // would still pass the three above.
+    {"name": "every probe delivered",
+     "expr": "workload_completed[\"population=256,active=256\"].mean >= workload_attempted[\"population=256,active=256\"].mean"}
+  ]
+}
