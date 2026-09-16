@@ -4,7 +4,9 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -339,6 +341,28 @@ func TestQueueLockKeepsOneRunner(t *testing.T) {
 		t.Fatalf("a stale lock must be reclaimed: %v", err)
 	}
 	release3()
+
+	// A live pid that is NOT this program is a reused pid, not a held lock.
+	// After a kill -9 the OS can recycle the dead runner's pid onto a shell or
+	// ssh child; a bare liveness test would read that as held and wedge the
+	// next queue. Stand in a live non-self process and require reclamation.
+	// The comm comparison behind this is Linux-only; elsewhere we conservatively
+	// treat any live pid as held, so scope the case to Linux.
+	if runtime.GOOS == "linux" {
+		other := exec.Command("sleep", "60")
+		if err := other.Start(); err != nil {
+			t.Skipf("cannot spawn a stand-in process: %v", err)
+		}
+		defer func() { _ = other.Process.Kill() }()
+		if err := os.WriteFile(path, []byte(fmt.Sprintf("%d\n", other.Process.Pid)), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		release4, err := acquireQueueLock(path)
+		if err != nil {
+			t.Fatalf("a lock held by a reused (non-self) pid must be reclaimed: %v", err)
+		}
+		release4()
+	}
 }
 
 // TestQueueDoctorGatesEachSuite: preflight runs before every suite, and a FAIL

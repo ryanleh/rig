@@ -502,7 +502,7 @@ func acquireQueueLock(path string) (func(), error) {
 		}
 		b, rerr := os.ReadFile(path)
 		pid, perr := strconv.Atoi(strings.TrimSpace(string(b)))
-		if rerr == nil && perr == nil && processAlive(pid) {
+		if rerr == nil && perr == nil && lockHolderAlive(pid) {
 			return nil, fmt.Errorf("another rig queue (pid %d) holds %s; wait for it or kill it", pid, path)
 		}
 		// Stale: the holder is gone. Its journal still says what it was doing.
@@ -525,6 +525,27 @@ func processAlive(pid int) bool {
 		return false
 	}
 	return p.Signal(syscall.Signal(0)) == nil
+}
+
+// lockHolderAlive reports whether the lock's pid is still a live queue.
+// A bare liveness test is not enough: after a `kill -9` the OS can hand the
+// dead runner's pid to an unrelated process (a shell, an ssh child), and
+// signal 0 would then read the stale lock as held by that stranger. On Linux
+// we confirm the live pid runs the SAME program we do, comparing
+// /proc/<pid>/comm to our own — so a pid reused by anything else frees the
+// lock, while a genuine second runner (same comm) is still refused. We only
+// declare STALE on a positively different comm; an unreadable comm (no /proc,
+// e.g. macOS) stays "held" so two runners can never collide on the cluster.
+func lockHolderAlive(pid int) bool {
+	if !processAlive(pid) {
+		return false
+	}
+	holder, herr := os.ReadFile(fmt.Sprintf("/proc/%d/comm", pid))
+	self, serr := os.ReadFile(fmt.Sprintf("/proc/%d/comm", os.Getpid()))
+	if herr != nil || serr != nil {
+		return true
+	}
+	return strings.TrimSpace(string(holder)) == strings.TrimSpace(string(self))
 }
 
 func stamp() string { return time.Now().Format(time.RFC3339) }

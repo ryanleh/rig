@@ -52,28 +52,37 @@ locals {
   subnet_id = sort(data.aws_subnets.default.ids)[0]
 
   # Cloud-init: the kernel limits from ../sysctl.sh, made persistent —
-  # sysctls via sysctl.d, and the fd ceiling for SSH sessions via pam_limits
-  # (sysctl.sh's `ulimit -n` is per-process; limits.d is the machine-wide
-  # equivalent for the processes the runner launches over SSH).
+  # sysctls via sysctl.d, and the fd limit three ways (var.nofile_limit): the
+  # kernel ceiling (fs.nr_open), systemd DefaultLimitNOFILE — the actual governor
+  # of the runner's non-login SSH sessions on Ubuntu cloud images, where
+  # pam_limits/limits.d does NOT apply to them — and limits.d as a backstop. A
+  # daemon-reexec plus an ssh restart make the systemd default take without a
+  # reboot; sysctl.sh's `ulimit -n` is only the per-process manual equivalent.
   user_data = <<-EOF
     #cloud-config
     write_files:
       - path: /etc/sysctl.d/99-rig.conf
         content: |
           # ../sysctl.sh equivalents
-          fs.nr_open = 1048576
+          fs.nr_open = ${var.nofile_limit}
           net.ipv4.ip_local_port_range = 1024 65535
           net.core.somaxconn = 4096
           net.ipv4.tcp_max_syn_backlog = 8192
           net.ipv4.tcp_slow_start_after_idle = 0
       - path: /etc/security/limits.d/99-rig.conf
         content: |
-          * soft nofile 1048576
-          * hard nofile 1048576
-          root soft nofile 1048576
-          root hard nofile 1048576
+          * soft nofile ${var.nofile_limit}
+          * hard nofile ${var.nofile_limit}
+          root soft nofile ${var.nofile_limit}
+          root hard nofile ${var.nofile_limit}
+      - path: /etc/systemd/system.conf.d/99-rig-nofile.conf
+        content: |
+          [Manager]
+          DefaultLimitNOFILE=${var.nofile_limit}
     runcmd:
       - sysctl --system
+      - systemctl daemon-reexec
+      - systemctl restart ssh.socket ssh.service
   EOF
 
   common_tags = {

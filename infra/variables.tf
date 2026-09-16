@@ -39,6 +39,23 @@ variable "client_count" {
   default     = 10
 }
 
+variable "nofile_limit" {
+  description = <<-EOT
+    Max open files (fd limit) for every process the runner launches over SSH.
+    The default suits client shards, which hold ~2 sockets per simulated
+    client. It is deliberately NOT raised by default: a SERVER that aggregates
+    one inbound connection per active client needs more, so a run above roughly
+    1M concurrent active clients must OPT IN by raising this (e.g. 4194304) —
+    otherwise the server brushes the ceiling, Accept returns EMFILE, and it
+    dies. Applied three ways so it actually takes on Ubuntu cloud images:
+    fs.nr_open (the kernel ceiling), systemd DefaultLimitNOFILE (the real
+    governor of SSH-session limits here — pam_limits/limits.d alone does not
+    apply to the runner's non-login sessions), and limits.d as a backstop.
+  EOT
+  type        = number
+  default     = 1048576
+}
+
 variable "server_instance_type" {
   description = "Instance type for every server machine."
   type        = string

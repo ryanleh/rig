@@ -5,9 +5,13 @@
 # root.
 set -e
 
-# File descriptors: connections dominate; leave generous headroom.
-ulimit -n 1048576 || true
-sysctl -w fs.nr_open=1048576
+# File descriptors: connections dominate — one inbound fd per active client.
+# The default suits client shards; a SERVER aggregating more than ~1M active
+# connections must raise this (run `NOFILE=4194304 sysctl.sh`), or Accept hits
+# EMFILE. nr_open (the ceiling) is set first so the ulimit can reach it.
+: "${NOFILE:=1048576}"
+sysctl -w fs.nr_open="$NOFILE"
+ulimit -n "$NOFILE" || true
 
 # Outbound ports: one (srcIP, dstIP, dstPort) tuple can hold ~64K connections;
 # widen the ephemeral range to use most of it. Shards needing more than 60K
